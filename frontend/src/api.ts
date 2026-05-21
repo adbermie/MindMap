@@ -78,4 +78,24 @@ export const api = {
     }),
   getEntry: (id: number) => request<Entry>(`/entries/${id}`),
   getGraph: () => request<GraphPayload>(`/graph`),
+  transcribe: async (audio: Blob): Promise<{ text: string; language: string | null }> => {
+    const fd = new FormData();
+    const ext = audio.type.includes("webm")
+      ? "webm"
+      : audio.type.includes("ogg")
+        ? "ogg"
+        : audio.type.includes("mp4") || audio.type.includes("m4a")
+          ? "m4a"
+          : "wav";
+    fd.append("audio", audio, `clip.${ext}`);
+    const res = await fetch(`${API_BASE}/transcribe`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    }
+    return res.json();
+  },
 };
