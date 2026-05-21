@@ -1,5 +1,12 @@
 import { formatDistanceToNow } from "date-fns";
-import { CircleCheck, CircleHelp, Link2, Sparkles, Trash2 } from "lucide-react";
+import {
+  CircleCheck,
+  CircleHelp,
+  Download,
+  Link2,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "../api";
@@ -38,7 +45,10 @@ export function EntryCard({ entry }: { entry: Entry }) {
   const ironOutError = (process.error ?? reprocess.error) as Error | undefined;
 
   return (
-    <article className="group rounded-xl border border-ink-200 bg-white px-5 py-4 transition hover:border-ink-900/20 dark:border-ink-900 dark:bg-ink-900/40 dark:hover:border-ink-100/20">
+    <article
+      id={`entry-${entry.id}`}
+      className="group rounded-xl border border-ink-200 bg-white px-5 py-4 transition hover:border-ink-900/20 dark:border-ink-900 dark:bg-ink-900/40 dark:hover:border-ink-100/20"
+    >
       <div className="mb-2 flex items-center justify-between gap-2 text-xs text-ink-900/40 dark:text-ink-100/40">
         <span>{ts}</span>
         <div className="flex items-center gap-2">
@@ -47,15 +57,26 @@ export function EntryCard({ entry }: { entry: Entry }) {
           </span>
           <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
             {entry.status === "processed" && (
-              <button
-                onClick={() => reprocess.mutate()}
-                disabled={reprocess.isPending}
-                className="rounded-full p-1 text-ink-900/40 hover:bg-ink-100 hover:text-ink-900 disabled:opacity-40 dark:text-ink-100/40 dark:hover:bg-ink-900 dark:hover:text-ink-100"
-                aria-label="Re-iron entry"
-                title="Re-iron this entry"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-              </button>
+              <>
+                <a
+                  href={api.exportEntryMarkdownUrl(entry.id)}
+                  download={`entry-${entry.id}.md`}
+                  className="rounded-full p-1 text-ink-900/40 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-100/40 dark:hover:bg-ink-900 dark:hover:text-ink-100"
+                  aria-label="Export as Markdown"
+                  title="Export as Markdown"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </a>
+                <button
+                  onClick={() => reprocess.mutate()}
+                  disabled={reprocess.isPending}
+                  className="rounded-full p-1 text-ink-900/40 hover:bg-ink-100 hover:text-ink-900 disabled:opacity-40 dark:text-ink-100/40 dark:hover:bg-ink-900 dark:hover:text-ink-100"
+                  aria-label="Re-iron entry"
+                  title="Re-iron this entry"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                </button>
+              </>
             )}
             <button
               onClick={() => {

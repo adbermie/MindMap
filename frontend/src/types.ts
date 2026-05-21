@@ -9,6 +9,16 @@ export interface Tag {
   color: string | null;
 }
 
+export interface TagWithCount extends Tag {
+  entry_count: number;
+}
+
+export interface SearchHit {
+  id: number;
+  snippet: string;
+  rank: number;
+}
+
 export interface Task {
   id: number;
   entry_id: number;

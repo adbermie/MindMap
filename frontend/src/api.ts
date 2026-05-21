@@ -1,4 +1,11 @@
-import type { Entry, EntrySource } from "./types";
+import type {
+  Entry,
+  EntrySource,
+  SearchHit,
+  TagWithCount,
+  Task,
+  TaskStatus,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -43,4 +50,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ instruction: instruction ?? null }),
     }),
+  exportEntryMarkdownUrl: (id: number) => `${API_BASE}/entries/${id}/export.md`,
+  listTags: () => request<TagWithCount[]>(`/tags`),
+  listTasks: (opts: { status?: TaskStatus; tag?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.status) params.set("status", opts.status);
+    if (opts.tag) params.set("tag", opts.tag);
+    const qs = params.toString();
+    return request<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
+  },
+  updateTask: (id: number, patch: Partial<Task>) =>
+    request<Task>(`/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  search: (q: string) =>
+    request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
 };

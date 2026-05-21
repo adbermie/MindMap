@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -266,6 +267,71 @@ def process_entry(entry_id: int, session: Session = Depends(get_session)) -> Ent
 
     entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
     return _serialize_entry(entry, session)
+
+
+@router.get("/{entry_id}/export.md", response_class=PlainTextResponse)
+def export_entry_markdown(
+    entry_id: int, session: Session = Depends(get_session)
+) -> PlainTextResponse:
+    entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+
+    lines: list[str] = []
+    lines.append(f"# Entry #{entry.id}")
+    lines.append("")
+    lines.append(f"*{entry.created_at.isoformat()} — status: {entry.status}*")
+    lines.append("")
+    if entry.ironed_prose:
+        lines.append("## Ironed")
+        lines.append("")
+        lines.append(entry.ironed_prose)
+        lines.append("")
+    lines.append("## Raw")
+    lines.append("")
+    lines.append(entry.raw_text)
+    lines.append("")
+    if entry.tags:
+        tag_names = " ".join(f"#{et.tag.name}" for et in entry.tags if et.tag is not None)
+        if tag_names:
+            lines.append(f"**Tags:** {tag_names}")
+            lines.append("")
+    if entry.tasks:
+        lines.append("## Tasks")
+        lines.append("")
+        for t in entry.tasks:
+            checkbox = "[x]" if t.status == "done" else "[ ]"
+            extras = []
+            if t.priority_hint:
+                extras.append(t.priority_hint)
+            if t.due_hint:
+                extras.append(t.due_hint)
+            suffix = f" _({', '.join(extras)})_" if extras else ""
+            lines.append(f"- {checkbox} {t.title}{suffix}")
+        lines.append("")
+    if entry.questions:
+        lines.append("## Questions")
+        lines.append("")
+        for q in entry.questions:
+            lines.append(f"- {q.text}")
+        lines.append("")
+    outbound = session.scalars(
+        select(EntryLink).where(EntryLink.src_entry_id == entry.id)
+    ).all()
+    if outbound:
+        lines.append("## Links")
+        lines.append("")
+        for link in outbound:
+            reason = f" — {link.reason}" if link.reason else ""
+            lines.append(f"- → Entry #{link.dst_entry_id}{reason}")
+        lines.append("")
+
+    body = "\n".join(lines).rstrip() + "\n"
+    return PlainTextResponse(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="entry-{entry.id}.md"'},
+    )
 
 
 @router.post("/{entry_id}/reprocess", response_model=EntryRead)
