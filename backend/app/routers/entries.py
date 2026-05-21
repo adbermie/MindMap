@@ -8,6 +8,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..db import get_session
+from pydantic import BaseModel, Field
+
 from ..ironer import iron_entry
 from ..models import Entry, EntryLink, EntryTag, Question, Tag, Task
 from ..schemas import (
@@ -20,6 +22,10 @@ from ..schemas import (
     TagRead,
     TaskRead,
 )
+
+
+class TagAttachRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
 
 
 router = APIRouter(prefix="/entries", tags=["entries"])
@@ -242,6 +248,55 @@ def _apply_iron_result(
                 reason=reason,
             )
         )
+
+
+@router.post("/{entry_id}/tags", response_model=EntryRead)
+def attach_tag(
+    entry_id: int,
+    payload: TagAttachRequest,
+    session: Session = Depends(get_session),
+) -> EntryRead:
+    entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    cleaned = payload.name.strip().lower()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Tag name is empty")
+    tag = _upsert_tag(session, cleaned)
+    existing = session.scalar(
+        select(EntryTag).where(
+            EntryTag.entry_id == entry.id, EntryTag.tag_id == tag.id
+        )
+    )
+    if existing is None:
+        session.add(EntryTag(entry_id=entry.id, tag_id=tag.id))
+        session.commit()
+        session.expire_all()
+    entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
+    return _serialize_entry(entry, session)
+
+
+@router.delete("/{entry_id}/tags/{tag_name}", response_model=EntryRead)
+def detach_tag(
+    entry_id: int, tag_name: str, session: Session = Depends(get_session)
+) -> EntryRead:
+    entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    cleaned = tag_name.strip().lower()
+    tag = session.scalar(select(Tag).where(Tag.name == cleaned))
+    if tag is not None:
+        link = session.scalar(
+            select(EntryTag).where(
+                EntryTag.entry_id == entry.id, EntryTag.tag_id == tag.id
+            )
+        )
+        if link is not None:
+            session.delete(link)
+            session.commit()
+            session.expire_all()
+    entry = session.scalar(_entry_with_relations_stmt().where(Entry.id == entry_id))
+    return _serialize_entry(entry, session)
 
 
 @router.post("/{entry_id}/process", response_model=EntryRead)

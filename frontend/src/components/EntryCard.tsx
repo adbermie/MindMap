@@ -4,20 +4,182 @@ import {
   CircleHelp,
   Download,
   Link2,
+  Plus,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
 import { cn } from "../lib/utils";
 import type { Entry } from "../types";
 
-function TagChip({ name }: { name: string }) {
+function EditableTags({ entry }: { entry: Entry }) {
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["entries"] });
+
+  const attach = useMutation({
+    mutationFn: (name: string) => api.attachTag(entry.id, name),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setAdding(false);
+      setDraft("");
+    },
+  });
+  const detach = useMutation({
+    mutationFn: (name: string) => api.detachTag(entry.id, name),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+    },
+  });
+
+  useEffect(() => {
+    if (adding) inputRef.current?.focus();
+  }, [adding]);
+
+  function commitAdd() {
+    const cleaned = draft.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!cleaned) {
+      setAdding(false);
+      setDraft("");
+      return;
+    }
+    if (entry.tags.some((t) => t.name === cleaned)) {
+      setAdding(false);
+      setDraft("");
+      return;
+    }
+    attach.mutate(cleaned);
+  }
+
   return (
-    <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] text-ink-900/70 dark:bg-ink-900 dark:text-ink-100/70">
-      #{name}
-    </span>
+    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      {entry.tags.map((t) => (
+        <span
+          key={t.id}
+          className="group/tag inline-flex items-center gap-0.5 rounded-full bg-ink-100 pl-2 pr-1 py-0.5 text-[11px] text-ink-900/70 dark:bg-ink-900 dark:text-ink-100/70"
+        >
+          #{t.name}
+          <button
+            onClick={() => detach.mutate(t.name)}
+            disabled={detach.isPending}
+            className="ml-0.5 rounded-full p-0.5 text-ink-900/30 opacity-0 transition group-hover/tag:opacity-100 hover:bg-ink-200 hover:text-ink-900 disabled:opacity-40 dark:text-ink-100/30 dark:hover:bg-ink-800 dark:hover:text-ink-100"
+            aria-label={`Remove tag ${t.name}`}
+            title={`Remove #${t.name}`}
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitAdd}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitAdd();
+            } else if (e.key === "Escape") {
+              setAdding(false);
+              setDraft("");
+            }
+          }}
+          placeholder="tag-name"
+          className="w-24 rounded-full bg-ink-50 px-2 py-0.5 text-[11px] text-ink-900 outline-none ring-1 ring-ink-200 focus:ring-ink-900/30 dark:bg-ink-950 dark:text-ink-100 dark:ring-ink-800 dark:focus:ring-ink-100/30"
+        />
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          disabled={attach.isPending}
+          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-ink-200 px-1.5 py-0.5 text-[11px] text-ink-900/40 opacity-0 transition hover:border-ink-900/30 hover:text-ink-900/70 disabled:opacity-40 group-hover:opacity-100 dark:border-ink-800 dark:text-ink-100/40 dark:hover:border-ink-100/30 dark:hover:text-ink-100/70"
+          aria-label="Add tag"
+          title="Add tag"
+        >
+          <Plus className="h-2.5 w-2.5" />
+          tag
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EditableProse({ entry }: { entry: Entry }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.ironed_prose ?? "");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const save = useMutation({
+    mutationFn: (ironed_prose: string) =>
+      api.updateEntry(entry.id, { ironed_prose }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["entries"] });
+      setEditing(false);
+    },
+  });
+
+  useEffect(() => {
+    if (editing) {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+      }
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    setDraft(entry.ironed_prose ?? "");
+  }, [entry.ironed_prose]);
+
+  if (!editing) {
+    return (
+      <p
+        onClick={() => setEditing(true)}
+        className="cursor-text whitespace-pre-wrap rounded text-[15px] leading-relaxed text-ink-900 hover:bg-ink-50/60 dark:text-ink-100 dark:hover:bg-ink-950/40"
+        title="Click to edit"
+      >
+        {entry.ironed_prose}
+      </p>
+    );
+  }
+  return (
+    <textarea
+      ref={textareaRef}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const el = e.target as HTMLTextAreaElement;
+        el.style.height = "auto";
+        el.style.height = `${el.scrollHeight}px`;
+      }}
+      onBlur={() => {
+        if (draft !== (entry.ironed_prose ?? "")) save.mutate(draft);
+        else setEditing(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          setDraft(entry.ironed_prose ?? "");
+          setEditing(false);
+        } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          if (draft !== (entry.ironed_prose ?? "")) save.mutate(draft);
+          else setEditing(false);
+        }
+      }}
+      className="w-full resize-none rounded bg-ink-50 px-2 py-1 text-[15px] leading-relaxed text-ink-900 outline-none ring-1 ring-ink-200 focus:ring-ink-900/30 dark:bg-ink-950 dark:text-ink-100 dark:ring-ink-800 dark:focus:ring-ink-100/30"
+    />
   );
 }
 
@@ -116,11 +278,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
         </>
       ) : (
         <>
-          {entry.ironed_prose && (
-            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink-900 dark:text-ink-100">
-              {entry.ironed_prose}
-            </p>
-          )}
+          {entry.ironed_prose && <EditableProse entry={entry} />}
           <details className="mt-2 text-xs text-ink-900/40 dark:text-ink-100/40">
             <summary className="cursor-pointer hover:text-ink-900/70 dark:hover:text-ink-100/70">
               raw
@@ -130,13 +288,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
             </p>
           </details>
 
-          {entry.tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {entry.tags.map((t) => (
-                <TagChip key={t.id} name={t.name} />
-              ))}
-            </div>
-          )}
+          <EditableTags entry={entry} />
 
           {entry.tasks.length > 0 && (
             <ul className="mt-3 flex flex-col gap-1.5 text-sm">

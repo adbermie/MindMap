@@ -66,4 +66,13 @@ export const api = {
     }),
   search: (q: string) =>
     request<SearchHit[]>(`/search?q=${encodeURIComponent(q)}`),
+  attachTag: (entryId: number, name: string) =>
+    request<Entry>(`/entries/${entryId}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  detachTag: (entryId: number, name: string) =>
+    request<Entry>(`/entries/${entryId}/tags/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
 };
