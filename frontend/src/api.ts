@@ -26,11 +26,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ raw_text, source }),
     }),
-  updateEntry: (id: number, patch: Partial<Pick<Entry, "raw_text" | "ironed_prose" | "status">>) =>
+  updateEntry: (
+    id: number,
+    patch: Partial<Pick<Entry, "raw_text" | "ironed_prose" | "status">>,
+  ) =>
     request<Entry>(`/entries/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
   deleteEntry: (id: number) =>
     request<void>(`/entries/${id}`, { method: "DELETE" }),
+  processEntry: (id: number) =>
+    request<Entry>(`/entries/${id}/process`, { method: "POST" }),
+  reprocessEntry: (id: number, instruction?: string) =>
+    request<Entry>(`/entries/${id}/reprocess`, {
+      method: "POST",
+      body: JSON.stringify({ instruction: instruction ?? null }),
+    }),
 };
