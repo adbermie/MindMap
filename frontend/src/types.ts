@@ -19,6 +19,25 @@ export interface SearchHit {
   rank: number;
 }
 
+export interface GraphNode {
+  id: number;
+  label: string;
+  primary_tag: string | null;
+  status: string;
+  tag_count: number;
+}
+
+export interface GraphEdge {
+  source: number;
+  target: number;
+  reason: string | null;
+}
+
+export interface GraphPayload {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface Task {
   id: number;
   entry_id: number;

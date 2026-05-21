@@ -1,6 +1,7 @@
 import type {
   Entry,
   EntrySource,
+  GraphPayload,
   SearchHit,
   TagWithCount,
   Task,
@@ -75,4 +76,6 @@ export const api = {
     request<Entry>(`/entries/${entryId}/tags/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
+  getEntry: (id: number) => request<Entry>(`/entries/${id}`),
+  getGraph: () => request<GraphPayload>(`/graph`),
 };

@@ -1,6 +1,7 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
@@ -13,6 +14,18 @@ engine = create_engine(
     connect_args=connect_args,
     pool_pre_ping=True,
 )
+
+
+# SQLite ignores ON DELETE CASCADE unless foreign_keys=ON is set per
+# connection. Without this, deleting an entry leaves orphan rows in
+# entry_tags, entry_links, tasks, and questions.
+if settings.database_url.startswith("sqlite"):
+
+    @event.listens_for(Engine, "connect")
+    def _enable_sqlite_fk(dbapi_connection, _):  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 

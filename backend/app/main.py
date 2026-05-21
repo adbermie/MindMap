@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .db import engine, init_db
 from .fts import install_fts
-from .routers import entries, search, tags, tasks
+from .routers import entries, graph, search, tags, tasks
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.include_router(entries.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(tags.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
+app.include_router(graph.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["meta"])

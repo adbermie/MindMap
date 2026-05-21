@@ -2,13 +2,14 @@ import { Brain } from "lucide-react";
 import { useState } from "react";
 
 import { CaptureBox } from "./components/CaptureBox";
+import { GraphView } from "./components/GraphView";
 import { SearchBar } from "./components/SearchBar";
 import { TasksView } from "./components/TasksView";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Timeline } from "./components/Timeline";
 import { cn } from "./lib/utils";
 
-type View = "feed" | "tasks";
+type View = "feed" | "tasks" | "graph";
 
 export default function App() {
   const [view, setView] = useState<View>("feed");
@@ -36,7 +37,7 @@ export default function App() {
               MindMap
             </div>
             <nav className="inline-flex rounded-full bg-ink-100 p-0.5 text-xs dark:bg-ink-900">
-              {(["feed", "tasks"] as View[]).map((v) => (
+              {(["feed", "tasks", "graph"] as View[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -59,8 +60,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-6 py-8">
-        {view === "feed" ? (
+      <main
+        className={cn(
+          "mx-auto px-6 py-8",
+          view === "graph" ? "max-w-5xl" : "max-w-2xl",
+        )}
+      >
+        {view === "feed" && (
           <>
             <section className="mb-8">
               <CaptureBox />
@@ -72,12 +78,21 @@ export default function App() {
               <Timeline />
             </section>
           </>
-        ) : (
+        )}
+        {view === "tasks" && (
           <section>
             <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
               Tasks
             </h2>
             <TasksView />
+          </section>
+        )}
+        {view === "graph" && (
+          <section>
+            <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
+              Graph
+            </h2>
+            <GraphView />
           </section>
         )}
       </main>
