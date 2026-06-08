@@ -19,6 +19,11 @@ export interface SearchHit {
   rank: number;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface GraphNode {
   id: number;
   label: string;

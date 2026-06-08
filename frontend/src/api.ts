@@ -1,4 +1,5 @@
 import type {
+  ChatMessage,
   Entry,
   EntrySource,
   GraphPayload,
@@ -8,7 +9,13 @@ import type {
   TaskStatus,
 } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+interface ChatHandlers {
+  onContext?: (entryIds: number[]) => void;
+  onToken: (text: string) => void;
+  signal?: AbortSignal;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -97,5 +104,37 @@ export const api = {
       throw new Error(`${res.status} ${res.statusText}: ${body}`);
     }
     return res.json();
+  },
+  // Streamed chat over the user's entries. Resolves when the stream ends;
+  // tokens arrive via handlers.onToken as they're generated.
+  chat: async (messages: ChatMessage[], handlers: ChatHandlers): Promise<void> => {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+      signal: handlers.signal,
+    });
+    if (!res.ok || !res.body) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) continue;
+        const evt = JSON.parse(line.slice(5).trim());
+        if (evt.type === "context") handlers.onContext?.(evt.entry_ids);
+        else if (evt.type === "token") handlers.onToken(evt.text);
+        else if (evt.type === "error") throw new Error(evt.detail);
+      }
+    }
   },
 };

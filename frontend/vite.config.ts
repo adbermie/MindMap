@@ -36,6 +36,11 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
         runtimeCaching: [
           {
+            // Chat is a streamed SSE response — never let the SW cache/replay it.
+            urlPattern: /\/api\/chat/,
+            handler: "NetworkOnly",
+          },
+          {
             urlPattern: /\/api\/.*/,
             handler: "NetworkFirst",
             options: {

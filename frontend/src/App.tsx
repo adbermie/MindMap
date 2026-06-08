@@ -2,6 +2,7 @@ import { Brain } from "lucide-react";
 import { useState } from "react";
 
 import { CaptureBox } from "./components/CaptureBox";
+import { ChatView } from "./components/ChatView";
 import { GraphView } from "./components/GraphView";
 import { SearchBar } from "./components/SearchBar";
 import { TasksView } from "./components/TasksView";
@@ -9,7 +10,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { Timeline } from "./components/Timeline";
 import { cn } from "./lib/utils";
 
-type View = "feed" | "tasks" | "graph";
+type View = "feed" | "tasks" | "graph" | "chat";
 
 export default function App() {
   const [view, setView] = useState<View>("feed");
@@ -37,7 +38,7 @@ export default function App() {
               MindMap
             </div>
             <nav className="inline-flex rounded-full bg-ink-100 p-0.5 text-xs dark:bg-ink-900">
-              {(["feed", "tasks", "graph"] as View[]).map((v) => (
+              {(["feed", "tasks", "graph", "chat"] as View[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -93,6 +94,14 @@ export default function App() {
               Graph
             </h2>
             <GraphView />
+          </section>
+        )}
+        {view === "chat" && (
+          <section>
+            <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
+              Chat
+            </h2>
+            <ChatView onFocusEntry={focusEntry} />
           </section>
         )}
       </main>
