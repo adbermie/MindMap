@@ -22,9 +22,11 @@ __pycache__/
 # Node / frontend
 node_modules/
 dist/
+dist-node/
 build/
 .vite/
 *.local
+*.tsbuildinfo
 
 # Data
 backend/data/

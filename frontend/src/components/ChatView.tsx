@@ -1,6 +1,7 @@
 import { CornerDownLeft, Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { api } from "../api";
 import type { ChatMessage } from "../types";
@@ -9,42 +10,55 @@ interface ChatViewProps {
   onFocusEntry: (entryId: number) => void;
 }
 
-const CITATION_RE = /\[#(\d+)\]/g;
+// Turn [#id] citations into markdown links so they render inside the prose
+// flow; the custom `a` renderer below turns entry: links into clickable chips.
+function withCitationLinks(content: string): string {
+  return content.replace(/\[#(\d+)\]/g, "[#$1](entry:$1)");
+}
 
-// Render message text, turning [#id] citations into clickable chips.
-function MessageBody({
+function AnswerMarkdown({
   content,
   onFocusEntry,
 }: {
   content: string;
   onFocusEntry: (id: number) => void;
 }) {
-  const parts: ReactNode[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  CITATION_RE.lastIndex = 0;
-  while ((m = CITATION_RE.exec(content)) !== null) {
-    if (m.index > last) parts.push(content.slice(last, m.index));
-    const id = Number(m[1]);
-    parts.push(
-      <button
-        key={`${m.index}-${id}`}
-        onClick={() => onFocusEntry(id)}
-        className="mx-0.5 rounded bg-ink-100 px-1 py-0.5 text-[0.7rem] font-medium text-ink-900/70 transition hover:bg-amber-200 dark:bg-ink-800 dark:text-ink-100/70 dark:hover:bg-amber-700/50"
-        title={`Jump to entry #${id}`}
-      >
-        #{id}
-      </button>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < content.length) parts.push(content.slice(last));
   return (
-    <>
-      {parts.map((p, i) => (
-        <Fragment key={i}>{p}</Fragment>
-      ))}
-    </>
+    <div className="space-y-2 text-sm leading-relaxed text-ink-900/90 dark:text-ink-100/90 [&_code]:rounded [&_code]:bg-ink-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[0.85em] dark:[&_code]:bg-ink-800 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5">
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => url}
+        components={{
+          a({ href, children }) {
+            const m = /^entry:(\d+)$/.exec(href ?? "");
+            if (m) {
+              const id = Number(m[1]);
+              return (
+                <button
+                  onClick={() => onFocusEntry(id)}
+                  className="mx-0.5 inline-flex items-center rounded bg-amber-100 px-1 align-baseline text-[0.78em] font-medium text-amber-900 transition hover:bg-amber-200 dark:bg-amber-400/20 dark:text-amber-200 dark:hover:bg-amber-400/35"
+                  title={`Jump to entry #${id}`}
+                >
+                  #{id}
+                </button>
+              );
+            }
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                {children}
+              </a>
+            );
+          },
+        }}
+      >
+        {withCitationLinks(content)}
+      </Markdown>
+    </div>
   );
 }
 
@@ -107,14 +121,18 @@ export function ChatView({ onFocusEntry }: ChatViewProps) {
             key={i}
             className={
               msg.role === "user"
-                ? "self-end max-w-[85%] rounded-2xl rounded-br-sm bg-ink-900 px-4 py-2 text-sm text-ink-50 dark:bg-ink-100 dark:text-ink-900"
-                : "self-start max-w-[90%] text-sm leading-relaxed text-ink-900/90 dark:text-ink-100/90"
+                ? "self-end max-w-[85%] rounded-2xl rounded-br-sm bg-ink-900 px-4 py-2 text-sm whitespace-pre-wrap text-ink-50 dark:bg-ink-100 dark:text-ink-900"
+                : "self-start max-w-[90%]"
             }
           >
-            {msg.role === "assistant" && msg.content === "" && streaming ? (
-              <Loader2 className="h-4 w-4 animate-spin text-ink-900/40 dark:text-ink-100/40" />
+            {msg.role === "assistant" ? (
+              msg.content === "" && streaming ? (
+                <Loader2 className="h-4 w-4 animate-spin text-ink-900/40 dark:text-ink-100/40" />
+              ) : (
+                <AnswerMarkdown content={msg.content} onFocusEntry={onFocusEntry} />
+              )
             ) : (
-              <MessageBody content={msg.content} onFocusEntry={onFocusEntry} />
+              msg.content
             )}
           </div>
         ))}
@@ -131,13 +149,14 @@ export function ChatView({ onFocusEntry }: ChatViewProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              // Enter submits; Shift+Enter (or Ctrl/Cmd+Enter) inserts a newline.
+              if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 e.preventDefault();
                 void send();
               }
             }}
             rows={2}
-            placeholder="Ask your entries…"
+            placeholder="Ask your entries…  (Enter to send, Shift+Enter for newline)"
             disabled={streaming}
             className="w-full resize-none rounded-2xl border border-ink-200 bg-white px-4 py-3 pr-12 text-sm text-ink-900 placeholder:text-ink-900/40 focus:border-ink-900/30 focus:outline-none focus:ring-0 disabled:opacity-60 dark:border-ink-900 dark:bg-ink-900/40 dark:text-ink-100 dark:placeholder:text-ink-100/40 dark:focus:border-ink-100/30"
           />
@@ -145,7 +164,7 @@ export function ChatView({ onFocusEntry }: ChatViewProps) {
             onClick={() => void send()}
             disabled={streaming || !input.trim()}
             className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-ink-900 text-ink-50 transition hover:opacity-90 disabled:opacity-30 dark:bg-ink-100 dark:text-ink-900"
-            title="Send (⌘/Ctrl+Enter)"
+            title="Send (Enter)"
           >
             {streaming ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
