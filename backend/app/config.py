@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
     # Lighter, faster model used for the open-question discussion chats.
     anthropic_haiku_model: str = "claude-haiku-4-5-20251001"
+    # Runs at most once/day/thread to write the handover + summary; quality
+    # compounds across every future turn, so it's worth a top model.
+    anthropic_rollup_model: str = "claude-opus-4-8"
+    # Days a thread can sit idle before its raw transcript is pruned (handover kept).
+    transcript_retention_days: int = 60
 
     whisper_model: str = "large-v3"
     whisper_device: str = "cuda"

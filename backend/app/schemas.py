@@ -90,3 +90,61 @@ class TaskUpdate(BaseModel):
     notes: str | None = None
     priority_hint: PriorityHint | None = None
     due_hint: str | None = None
+
+
+# ---- conversations -----------------------------------------------------------
+
+ConversationKind = Literal["search", "question"]
+
+
+class ConversationCreate(BaseModel):
+    kind: ConversationKind = "search"
+    focus_question: str | None = None
+    seed_entry_id: int | None = None
+    title: str | None = None
+
+
+class ConversationListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: ConversationKind
+    title: str
+    last_activity_at: datetime
+    has_summary: bool
+
+
+class MessageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+
+
+class ConversationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: ConversationKind
+    title: str
+    focus_question: str | None
+    seed_entry_id: int | None
+    created_at: datetime
+    last_activity_at: datetime
+    summary: str | None
+    last_rollup_at: datetime | None
+    transcript_pruned: bool
+    # Only the live (not-yet-rolled-up) messages; archived ones load on demand.
+    messages: list[MessageRead] = Field(default_factory=list)
+    archived_count: int = 0
+
+
+class SendMessageRequest(BaseModel):
+    content: str = Field(min_length=1)
+
+
+class RollupResult(BaseModel):
+    rolled_up: int
+    pruned: int

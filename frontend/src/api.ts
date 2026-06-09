@@ -1,5 +1,8 @@
 import type {
-  ChatMessage,
+  Conversation,
+  ConversationKind,
+  ConversationListItem,
+  ConversationMessageRow,
   Entry,
   EntrySource,
   GraphPayload,
@@ -11,15 +14,46 @@ import type {
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-interface ChatHandlers {
+interface StreamHandlers {
   onContext?: (entryIds: number[]) => void;
   onToken: (text: string) => void;
   signal?: AbortSignal;
 }
 
-interface ChatOptions {
-  mode?: "search" | "question";
-  focusQuestion?: string;
+// Read a Server-Sent-Events stream of {type, ...} JSON events from a POST.
+async function streamSSE(
+  path: string,
+  body: unknown,
+  handlers: StreamHandlers,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: handlers.signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith("data:")) continue;
+      const evt = JSON.parse(line.slice(5).trim());
+      if (evt.type === "context") handlers.onContext?.(evt.entry_ids);
+      else if (evt.type === "token") handlers.onToken(evt.text);
+      else if (evt.type === "error") throw new Error(evt.detail);
+    }
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -110,44 +144,32 @@ export const api = {
     }
     return res.json();
   },
-  // Streamed chat over the user's entries. Resolves when the stream ends;
-  // tokens arrive via handlers.onToken as they're generated.
-  chat: async (
-    messages: ChatMessage[],
-    handlers: ChatHandlers,
-    opts: ChatOptions = {},
-  ): Promise<void> => {
-    const res = await fetch(`${API_BASE}/chat`, {
+  // ---- conversations -------------------------------------------------------
+  listConversations: () => request<ConversationListItem[]>(`/conversations`),
+  getConversation: (id: number) => request<Conversation>(`/conversations/${id}`),
+  createConversation: (body: {
+    kind: ConversationKind;
+    focus_question?: string;
+    seed_entry_id?: number;
+    title?: string;
+  }) =>
+    request<Conversation>(`/conversations`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages,
-        mode: opts.mode ?? "search",
-        focus_question: opts.focusQuestion ?? null,
-      }),
-      signal: handlers.signal,
-    });
-    if (!res.ok || !res.body) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`${res.status} ${res.statusText}: ${body}`);
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split("\n\n");
-      buf = parts.pop() ?? "";
-      for (const part of parts) {
-        const line = part.trim();
-        if (!line.startsWith("data:")) continue;
-        const evt = JSON.parse(line.slice(5).trim());
-        if (evt.type === "context") handlers.onContext?.(evt.entry_ids);
-        else if (evt.type === "token") handlers.onToken(evt.text);
-        else if (evt.type === "error") throw new Error(evt.detail);
-      }
-    }
-  },
+      body: JSON.stringify(body),
+    }),
+  deleteConversation: (id: number) =>
+    request<void>(`/conversations/${id}`, { method: "DELETE" }),
+  getTranscript: (id: number) =>
+    request<ConversationMessageRow[]>(`/conversations/${id}/transcript`),
+  // Streamed assistant reply, persisted server-side. Tokens via onToken.
+  sendConversationMessage: (
+    id: number,
+    content: string,
+    handlers: StreamHandlers,
+  ) => streamSSE(`/conversations/${id}/messages`, { content }, handlers),
+  // Lazy end-of-day rollup + retention prune. Safe to call on every app load.
+  runRollup: () =>
+    request<{ rolled_up: number; pruned: number }>(`/maintenance/rollup`, {
+      method: "POST",
+    }),
 };

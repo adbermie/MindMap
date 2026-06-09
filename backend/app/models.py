@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -106,3 +107,51 @@ class Question(Base):
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     entry: Mapped[Entry] = relationship(back_populates="questions")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), default="search")  # 'search' | 'question'
+    title: Mapped[str] = mapped_column(String(200), default="New chat")
+    # For question threads: the open question and the entry it came from.
+    focus_question: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seed_entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("entries.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    # Evolving, model-facing running memory (grows; preserves chronology).
+    handover: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Human-facing summary derived from the handover, shown in place of transcript.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    handover_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_rollup_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    transcript_pruned: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    messages: Mapped[list["ConversationMessage"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.created_at",
+    )
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # 'user' | 'assistant'
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    # True once incorporated into the handover (archived; pruned after retention).
+    rolled_up: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")

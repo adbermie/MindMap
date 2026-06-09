@@ -24,6 +24,38 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ConversationKind = "search" | "question";
+
+export interface ConversationListItem {
+  id: number;
+  kind: ConversationKind;
+  title: string;
+  last_activity_at: string;
+  has_summary: boolean;
+}
+
+export interface ConversationMessageRow {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: number;
+  kind: ConversationKind;
+  title: string;
+  focus_question: string | null;
+  seed_entry_id: number | null;
+  created_at: string;
+  last_activity_at: string;
+  summary: string | null;
+  last_rollup_at: string | null;
+  transcript_pruned: boolean;
+  messages: ConversationMessageRow[];
+  archived_count: number;
+}
+
 export interface GraphNode {
   id: number;
   label: string;

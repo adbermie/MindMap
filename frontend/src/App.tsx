@@ -1,8 +1,9 @@
 import { Brain } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { api } from "./api";
 import { CaptureBox } from "./components/CaptureBox";
-import { ChatView, type ChatSeed } from "./components/ChatView";
+import { ConversationsView, type ChatSeed } from "./components/ConversationsView";
 import { GraphView } from "./components/GraphView";
 import { SearchBar } from "./components/SearchBar";
 import { TasksView } from "./components/TasksView";
@@ -15,6 +16,12 @@ type View = "feed" | "tasks" | "graph" | "chat";
 export default function App() {
   const [view, setView] = useState<View>("feed");
   const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
+
+  // Lazy end-of-day rollup: on load, summarize yesterday's threads + prune.
+  // A scheduler can take this over later (Raspberry Pi, always-on).
+  useEffect(() => {
+    void api.runRollup().catch(() => {});
+  }, []);
 
   function discussQuestion(question: string, entryId: number) {
     setChatSeed((prev) => ({
@@ -74,7 +81,7 @@ export default function App() {
       <main
         className={cn(
           "mx-auto px-6 py-8",
-          view === "graph" ? "max-w-5xl" : "max-w-2xl",
+          view === "graph" || view === "chat" ? "max-w-5xl" : "max-w-2xl",
         )}
       >
         {view === "feed" && (
@@ -108,10 +115,7 @@ export default function App() {
         )}
         {view === "chat" && (
           <section>
-            <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
-              Chat
-            </h2>
-            <ChatView
+            <ConversationsView
               onFocusEntry={focusEntry}
               seed={chatSeed}
               onSeedConsumed={() => setChatSeed(null)}
