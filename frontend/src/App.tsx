@@ -2,7 +2,7 @@ import { Brain } from "lucide-react";
 import { useState } from "react";
 
 import { CaptureBox } from "./components/CaptureBox";
-import { ChatView } from "./components/ChatView";
+import { ChatView, type ChatSeed } from "./components/ChatView";
 import { GraphView } from "./components/GraphView";
 import { SearchBar } from "./components/SearchBar";
 import { TasksView } from "./components/TasksView";
@@ -14,6 +14,16 @@ type View = "feed" | "tasks" | "graph" | "chat";
 
 export default function App() {
   const [view, setView] = useState<View>("feed");
+  const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
+
+  function discussQuestion(question: string, entryId: number) {
+    setChatSeed((prev) => ({
+      question,
+      entryId,
+      key: (prev?.key ?? 0) + 1,
+    }));
+    setView("chat");
+  }
 
   function focusEntry(entryId: number) {
     setView("feed");
@@ -76,7 +86,7 @@ export default function App() {
               <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
                 Recent
               </h2>
-              <Timeline />
+              <Timeline onDiscuss={discussQuestion} />
             </section>
           </>
         )}
@@ -101,7 +111,11 @@ export default function App() {
             <h2 className="mb-3 px-1 text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-100/40">
               Chat
             </h2>
-            <ChatView onFocusEntry={focusEntry} />
+            <ChatView
+              onFocusEntry={focusEntry}
+              seed={chatSeed}
+              onSeedConsumed={() => setChatSeed(null)}
+            />
           </section>
         )}
       </main>

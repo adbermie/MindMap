@@ -3,7 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { EntryCard } from "./EntryCard";
 
-export function Timeline() {
+export function Timeline({
+  onDiscuss,
+}: {
+  onDiscuss?: (question: string, entryId: number) => void;
+}) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["entries"],
     queryFn: () => api.listEntries(100),
@@ -32,7 +36,7 @@ export function Timeline() {
   return (
     <div className="flex flex-col gap-3">
       {data.map((e) => (
-        <EntryCard key={e.id} entry={e} />
+        <EntryCard key={e.id} entry={e} onDiscuss={onDiscuss} />
       ))}
     </div>
   );

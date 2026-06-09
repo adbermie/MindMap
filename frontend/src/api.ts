@@ -17,6 +17,11 @@ interface ChatHandlers {
   signal?: AbortSignal;
 }
 
+interface ChatOptions {
+  mode?: "search" | "question";
+  focusQuestion?: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -107,11 +112,19 @@ export const api = {
   },
   // Streamed chat over the user's entries. Resolves when the stream ends;
   // tokens arrive via handlers.onToken as they're generated.
-  chat: async (messages: ChatMessage[], handlers: ChatHandlers): Promise<void> => {
+  chat: async (
+    messages: ChatMessage[],
+    handlers: ChatHandlers,
+    opts: ChatOptions = {},
+  ): Promise<void> => {
     const res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({
+        messages,
+        mode: opts.mode ?? "search",
+        focus_question: opts.focusQuestion ?? null,
+      }),
       signal: handlers.signal,
     });
     if (!res.ok || !res.body) {

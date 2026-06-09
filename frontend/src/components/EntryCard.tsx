@@ -4,6 +4,7 @@ import {
   CircleHelp,
   Download,
   Link2,
+  MessageCircleQuestion,
   Plus,
   Sparkles,
   Trash2,
@@ -183,7 +184,13 @@ function EditableProse({ entry }: { entry: Entry }) {
   );
 }
 
-export function EntryCard({ entry }: { entry: Entry }) {
+export function EntryCard({
+  entry,
+  onDiscuss,
+}: {
+  entry: Entry;
+  onDiscuss?: (question: string, entryId: number) => void;
+}) {
   const queryClient = useQueryClient();
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["entries"] });
@@ -321,7 +328,20 @@ export function EntryCard({ entry }: { entry: Entry }) {
               {entry.questions.map((q) => (
                 <li key={q.id} className="flex items-start gap-2">
                   <CircleHelp className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-ink-900/40 dark:text-ink-100/40" />
-                  <span className="flex-1 italic">{q.text}</span>
+                  {onDiscuss ? (
+                    <button
+                      onClick={() => onDiscuss(q.text, entry.id)}
+                      className="group/q flex-1 text-left italic transition hover:text-ink-900 dark:hover:text-ink-100"
+                      title="Discuss this with Claude"
+                    >
+                      <span className="underline decoration-dotted decoration-ink-900/20 underline-offset-4 group-hover/q:decoration-amber-500 dark:decoration-ink-100/20">
+                        {q.text}
+                      </span>
+                      <MessageCircleQuestion className="ml-1.5 inline h-3.5 w-3.5 -translate-y-0.5 text-ink-900/30 opacity-0 transition group-hover/q:opacity-100 dark:text-ink-100/30" />
+                    </button>
+                  ) : (
+                    <span className="flex-1 italic">{q.text}</span>
+                  )}
                 </li>
               ))}
             </ul>

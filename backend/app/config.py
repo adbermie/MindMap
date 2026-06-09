@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+    # Lighter, faster model used for the open-question discussion chats.
+    anthropic_haiku_model: str = "claude-haiku-4-5-20251001"
 
     whisper_model: str = "large-v3"
     whisper_device: str = "cuda"

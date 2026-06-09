@@ -25,6 +25,10 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
+    # "search": FTS retrieval + Sonnet (the general chat tab).
+    # "question": whole-DB context + Haiku, for discussing an open question.
+    mode: Literal["search", "question"] = "search"
+    focus_question: str | None = None
 
 
 _SYSTEM_PROMPT = """You are MindMap's chat assistant.
@@ -44,6 +48,25 @@ Only cite entries you actually used. If the provided entries don't contain
 enough to answer, say so plainly rather than inventing facts."""
 
 
+_QUESTION_SYSTEM_PROMPT = """You are MindMap's question companion — a thinking
+partner for the single user.
+
+MindMap is the user's personal thought-unloader: a corpus of their own entries
+(ironed prose, tags, tasks, open questions). You are given their ENTIRE corpus
+as context. The user has clicked one of their own open questions to think it
+through with you.
+
+Your job: help them actually make progress on the question. Draw freely on the
+whole corpus — surface relevant past entries, patterns, prior decisions,
+contradictions, and tasks that bear on it. Ask a sharp clarifying question when
+it would genuinely move things forward, but don't stall — offer a view. Be
+concrete and specific to THEIR situation, not generic advice.
+
+Tone: calm, direct, a little incisive — a smart friend who has read everything
+they've written. Cite specific entries inline as [#id] when you lean on them.
+Keep turns reasonably short so it stays a conversation, not a lecture."""
+
+
 # Retrieval: id + rank only (the chat context block carries the text itself).
 _FTS_IDS_SQL = text(
     """
@@ -54,6 +77,27 @@ _FTS_IDS_SQL = text(
     LIMIT :limit
     """
 )
+
+
+def _entry_summary(e: Entry) -> dict[str, Any]:
+    summary = (e.ironed_prose or e.raw_text or "").strip().replace("\n", " ")
+    if len(summary) > 600:
+        summary = summary[:597] + "..."
+    tags = [et.tag.name for et in e.tags if et.tag is not None]
+    return {"id": e.id, "summary": summary, "tags": tags}
+
+
+def _all_entries(session: Session, cap: int = 500) -> list[dict[str, Any]]:
+    """Whole-DB context for question discussions: every entry (newest first),
+    bounded by a generous safety cap so a runaway corpus can't blow the context
+    window. For a personal single-user app this is effectively all of it."""
+    entries = session.scalars(
+        select(Entry)
+        .options(selectinload(Entry.tags).selectinload(EntryTag.tag))
+        .order_by(desc(Entry.created_at))
+        .limit(cap)
+    ).all()
+    return [_entry_summary(e) for e in entries]
 
 
 def _retrieve(
@@ -103,11 +147,7 @@ def _retrieve(
         e = by_id.get(eid)
         if e is None:
             continue
-        summary = (e.ironed_prose or e.raw_text or "").strip().replace("\n", " ")
-        if len(summary) > 600:
-            summary = summary[:597] + "..."
-        tags = [et.tag.name for et in e.tags if et.tag is not None]
-        out.append({"id": e.id, "summary": summary, "tags": tags})
+        out.append(_entry_summary(e))
     return out
 
 
@@ -129,6 +169,7 @@ def _make_stream(
     messages_payload: list[dict[str, str]],
     system_blocks: list[dict[str, Any]],
     context_entry_ids: list[int],
+    model: str,
 ) -> Callable[[], Iterator[str]]:
     def gen() -> Iterator[str]:
         # Tell the client up front which entries are in context.
@@ -136,7 +177,7 @@ def _make_stream(
         try:
             client = _get_client()
             with client.messages.stream(
-                model=settings.anthropic_model,
+                model=model,
                 max_tokens=2048,
                 system=system_blocks,
                 messages=messages_payload,
@@ -153,21 +194,34 @@ def _make_stream(
 
 @router.post("")
 def chat(payload: ChatRequest, session: Session = Depends(get_session)) -> StreamingResponse:
-    latest_user = next(
-        (m.content for m in reversed(payload.messages) if m.role == "user"), ""
-    )
-    entries = _retrieve(session, latest_user)
+    if payload.mode == "question":
+        entries = _all_entries(session)
+        model = settings.anthropic_haiku_model
+        system_text = _QUESTION_SYSTEM_PROMPT
+        if payload.focus_question and payload.focus_question.strip():
+            system_text += (
+                f"\n\nThe open question under discussion: "
+                f"{payload.focus_question.strip()}"
+            )
+    else:
+        latest_user = next(
+            (m.content for m in reversed(payload.messages) if m.role == "user"), ""
+        )
+        entries = _retrieve(session, latest_user)
+        model = settings.anthropic_model
+        system_text = _SYSTEM_PROMPT
+
     system_blocks = [
         {
             "type": "text",
-            "text": _SYSTEM_PROMPT,
+            "text": system_text,
             "cache_control": {"type": "ephemeral"},
         },
         {"type": "text", "text": _format_context(entries)},
     ]
     messages_payload = [{"role": m.role, "content": m.content} for m in payload.messages]
 
-    gen = _make_stream(messages_payload, system_blocks, [e["id"] for e in entries])
+    gen = _make_stream(messages_payload, system_blocks, [e["id"] for e in entries], model)
     return StreamingResponse(
         gen(),
         media_type="text/event-stream",
