@@ -56,17 +56,24 @@ export interface Conversation {
   archived_count: number;
 }
 
+export type GraphNodeType = "entry" | "tag";
+
 export interface GraphNode {
-  id: number;
+  id: string; // "e:<entry_id>" or "t:<name>"
+  type: GraphNodeType;
   label: string;
+  entry_id: number | null;
   primary_tag: string | null;
-  status: string;
-  tag_count: number;
+  tags: string[];
+  status: string | null;
+  created_at: string | null;
+  count: number;
 }
 
 export interface GraphEdge {
-  source: number;
-  target: number;
+  source: string;
+  target: string;
+  type: "tag" | "link";
   reason: string | null;
 }
 
